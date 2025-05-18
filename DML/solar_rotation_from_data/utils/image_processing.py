@@ -8,7 +8,7 @@ This utility is responsible for preprocessing the images for feature detection.
         - detect solar center and radius
 '''
 
-def detect_sunspots(image_path, sunspot_threshold=25, min_area=15):
+def detect_sunspots(image_path, sunspot_threshold=25, min_area=16):
     img = cv2.imread(image_path)
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     

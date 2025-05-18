@@ -3,7 +3,7 @@ from scipy.spatial import KDTree
 from utils.solar_geometry import pixel_to_heliographic, calculate_angular_velocity
 
 class SunspotTracker:
-    def __init__(self, solar_center_px, solar_radius_px, max_angular_speed=1):  # deg/hr
+    def __init__(self, solar_center_px, solar_radius_px, max_angular_speed=2):  # deg/hr
         """
         solar_radius_px: Radius of Sun in pixels
         max_angular_speed: Maximum expected angular speed (deg/hr)
@@ -19,39 +19,70 @@ class SunspotTracker:
         
         if not self.tracks:  # First frame initialization
             for pos in centroids:
+                pos_helio = self._pixel_to_angular(pos,frame_time)
                 self.tracks.append({
-                    'positions': [pos],
+                    'positions_px': [pos],
+                    'positions_helio': [pos_helio],
                     'times': [frame_time],
                     'velocities': []
                 })
             return
         
-        # Convert existing tracks to angular coordinates
-        prev_angular = [self._pixel_to_angular(t['positions'][-1], t['times'][-1]) for t in self.tracks]
+        #Convert new centroids into heliographic coords
         current_angular = [self._pixel_to_angular(c, frame_time) for c in centroids]
+        current_angular_tuple = [(p.lon.deg % 360, p.lat.deg) for p in current_angular]
         
-        prev_angular_tuple = [(p.lon.deg % 360, p.lat.deg % 360) for p in prev_angular]
-        current_angular_tuple = [(p.lon.deg % 360, p.lat.deg % 360) for p in current_angular]
+        
+        # Convert existing tracks to helio coords
+        prev_angular = [t['positions_helio'][-1] for t in self.tracks]
+        prev_angular_tuple = [(p.lon.deg % 360, p.lat.deg) for p in prev_angular]
+        
         
         # Find nearest neighbors
         tree = KDTree(current_angular_tuple) 
         distances, indices = tree.query(prev_angular_tuple, distance_upper_bound=self.max_speed)
         
+        
         # Update tracks
         updated = set()
-        for track_idx, (dist, current_idx) in enumerate(zip(distances, indices)):
-            if current_idx < len(centroids):
-                self._update_track(track_idx, centroids[current_idx], frame_time)
-                updated.add(current_idx)
-        
-        # Start new tracks for unmatched detections (including splits)
+        for track_idx, (dist, match_idx) in enumerate(zip(distances, indices)):
+            '''Perform validation checks'''
+            #Check if there are more matches than centroids
+            if match_idx >= len(centroids):
+                continue
+            
+            new_pos = centroids[match_idx]
+            assert isinstance(self.tracks[track_idx]['times'], list) #Some type protection because of a bug where a list was just datetime
+            prev_time = self.tracks[track_idx]['times'][-1]
+            
+            
+            #Time gap validation (max 3 hours)
+            if (frame_time - prev_time).total_seconds() > 3*3600:
+                continue
+            
+            #Velocity validation
+            # print(f"prev_angular = {prev_angular}\ncurrent_angular = {current_angular}\ntrack_idx = {track_idx}")
+            velocity = calculate_angular_velocity(prev_angular[track_idx], prev_time, current_angular[match_idx], frame_time)
+            if abs(velocity) > 15: #deg/day
+                continue
+            
+            '''Update tracks'''
+            self.tracks[track_idx]['positions_px'].append(new_pos)
+            self.tracks[track_idx]['positions_helio'].append(current_angular[match_idx])
+            self.tracks[track_idx]['times'].append(frame_time)
+            self.tracks[track_idx]['velocities'].append(velocity)
+            updated.add(match_idx)
+            
+        #Start new tracks for unmatched centroids
         for i, pos in enumerate(centroids):
             if i not in updated:
                 self.tracks.append({
-                    'positions': [pos],
+                    'positions_px': [pos],
+                    'positions_helio': [current_angular[i]],
                     'times': [frame_time],
                     'velocities': []
                 })
+        
 
     def _pixel_to_angular(self, position, time):
         """Convert pixel position to angular coordinates (degrees from center)"""
@@ -61,50 +92,37 @@ class SunspotTracker:
             return coords
         return None
 
-    def _update_track(self, track_idx, new_position, new_time):
-        try:
-            prev_time = self.tracks[track_idx]['times'][-1]
-            prev_position = self.tracks[track_idx]['positions'][-1]
-            prev_angular = self._pixel_to_angular(prev_position, prev_time)
-            new_angular = self._pixel_to_angular(new_position, new_time)
-            if None in (prev_angular, new_angular):
-                return
-            # Physical velocity constraints
-            # print(f"prev_angular = {prev_angular}\n\
-            #       prev_time = {prev_time}\n\
-            #           new_angular = {new_angular}\n\
-            #               new_time = {new_time}")
+    # def _update_track(self, track_idx, new_position, new_time):
+    #     try:
+    #         prev_time = self.tracks[track_idx]['times'][-1]
+    #         prev_angular = self.tracks[track_idx]['positions_helio'][-1]
+    #         new_angular = self._pixel_to_angular(new_position, new_time)
             
-            velocity = calculate_angular_velocity(prev_angular, 
-                                                prev_time,
-                                                new_angular, new_time)
-            # print("here 3")
-            if abs(velocity) > 15:  # Max solar surface speed ~2 km/s ≈ 20 deg/day
-                return
+    #         if None in (prev_angular, new_angular):
+    #             return
             
-            # Update track
-            self.tracks[track_idx]['positions'].append(new_position)
-            self.tracks[track_idx]['times'].append(new_time)
-            self.tracks[track_idx]['velocities'].append(velocity)
-            # print("here 4")
-        except Exception as e:
-            print(f"Error updating track {track_idx}: {str(e)}")
+    #         # Physical velocity constraints
+    #         velocity = calculate_angular_velocity(prev_angular, 
+    #                                             prev_time,
+    #                                             new_angular, new_time)
+    #         # print("here 3")
+    #         if abs(velocity) > 15:  # Max solar surface speed ~2 km/s ≈ 20 deg/day
+    #             return
+            
+    #         #Check for large time jump to avoid rematching incorrectly
+    #         max_gap = 3*3600 #3 hour max?
+    #         if (new_time - prev_time).total_seconds() > max_gap:
+    #             return
+            
+    #         # Update track
+    #         self.tracks[track_idx]['positions_px'].append(new_position)
+    #         self.tracks[track_idx]['positions_helio'].append(new_angular)
+    #         self.tracks[track_idx]['times'].append(new_time)
+    #         self.tracks[track_idx]['velocities'].append(velocity)
+    #         # print("here 4")
+    #     except Exception as e:
+    #         print(f"Error updating track {track_idx}: {str(e)}")
         
-        
-        # track = self.tracks[track_idx]
-        # prev_time = track['times'][-1]
-        
-        # # Calculate angular velocity
-        # prev_angular = self._pixel_to_angular(track['positions'][-1], track['times'][-1])
-        # new_angular = self._pixel_to_angular(new_position, new_time)
-        
-        # angular_velocity = calculate_angular_velocity(prev_angular, prev_time, new_angular, new_time)
-        
-        # # Update track
-        # track['positions'].append(new_position)
-        # track['times'].append(new_time)
-        # track['velocities'].append(angular_velocity)
-
     def get_all_velocities(self):
         """Return all velocity measurements in deg/hr"""
         return [track['velocities'] for track in self.tracks]
