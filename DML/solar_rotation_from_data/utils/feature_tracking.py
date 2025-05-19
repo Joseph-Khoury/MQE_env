@@ -11,7 +11,7 @@ class SunspotTracker:
         self.solar_center = solar_center_px
         self.solar_radius = solar_radius_px
         self.max_speed = max_angular_speed
-        self.tracks = []  # List of dicts: {'positions': [], 'times': [], 'velocities': []}
+        self.tracks = []  # List of dicts: {'positions_px': [list], 'positions_helio': [SkyCoords] 'times': [datetime], 'velocities': [float]}
         
     def process_frame(self, frame_time, centroids):
         """Process a new frame of sunspot positions"""
