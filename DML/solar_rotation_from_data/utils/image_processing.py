@@ -8,7 +8,7 @@ This utility is responsible for preprocessing the images for feature detection.
         - detect solar center and radius
 '''
 
-def detect_sunspots(image_path, sunspot_threshold=25, min_area=9):
+def detect_sunspots(image_path, sunspot_threshold=25, min_area=16, kernel_size = 3):
     img = cv2.imread(image_path)
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
@@ -20,7 +20,7 @@ def detect_sunspots(image_path, sunspot_threshold=25, min_area=9):
     cv2.circle(mask, solar_center, int(solar_radius * 0.95), 255, -1)
     
     # 3. Sunspot-specific processing
-    blurred = cv2.GaussianBlur(gray_img, (7,7), 0)
+    blurred = cv2.GaussianBlur(gray_img, (kernel_size, kernel_size), 0)
     
     # Focused adaptive thresholding
     sunspots = cv2.adaptiveThreshold(blurred, 255,
