@@ -7,6 +7,8 @@ from astropy.coordinates import SkyCoord
 
 from utils.solar_geometry import calculate_angular_velocity
 
+
+
 default_url = "https://soho.nascom.nasa.gov/data/REPROCESSING/Completed/2025/hmiigr/"
 default_save_dir = "sdo_hmi_jpgs"
 
