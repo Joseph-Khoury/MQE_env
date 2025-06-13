@@ -146,7 +146,7 @@ def simulate_quantum_hits_parallel(z2, total_photons, n_jobs=-1, target_memory_g
 
 # --- Initial Settings ---
 initial_z2_offset = 3e-6 # TODO (e.g., 1e-3)
-initial_photons = 1e6 # TODO (e.g., 1000)
+initial_photons = 1e9 # TODO (e.g., 1000)
 initial_z2 = z1 + initial_z2_offset
 extent = (-L/2, L/2, -L/2, L/2)  # for mm scale
 

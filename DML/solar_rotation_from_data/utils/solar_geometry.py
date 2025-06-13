@@ -33,7 +33,8 @@ def pixel_to_heliographic(x, y, time, image_center, solar_radius_px):
     # Solar orientation parameters (radians)
     B0 = sun.B0(time).to(u.rad).value #Latitude of center disk
     L0 = sun.L0(time).to(u.rad).value #Carrington longitude
-    P = sun.P(time).to(u.rad).value #Angle between geocentric north and true solar north
+    # P = sun.P(time).to(u.rad).value #Angle between geocentric north and true solar north
+    P=0 # The data is already adjusted to have the North aligned
 
     # Position angle from solar axis
     theta = np.arctan2(dy, dx) - P
